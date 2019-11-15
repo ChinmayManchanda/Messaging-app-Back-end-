@@ -1,40 +1,39 @@
 #coding: utf-8
 from socket import *
 import sys
+import thread
+stop_thread = False
 
-def takeMessages():
-    message = raw_input('Command :')
-    line = message
-    
+def takeMessages(message):
     while 1:
-        if (message == "logout"):
-            logout()        
-        elif (message == "quit"):
-            clientSocket.close()
-        elif (message == "whoelse"):
-            whoelse()
-        elif (line.split()[0] == "whoelsesince") :
-            whoelsesince(message)
-def logout():
-    clientSocket.send("logout")
-    modifiedSentence = clientSocket.recv(1024)
-    print 'From Server:', modifiedSentence
-    login()   
-         
-def whoelse():
-    clientSocket.send("whoelse")
-    modifiedSentence = clientSocket.recv(1024)
-    print 'From Server:', modifiedSentence
-    takeMessages()
+        if (message == "login"):
+            break
+        message = raw_input('Command :')
+        if stop_thread:
+            break
+        clientSocket.send(message)
+    return   
     
-def whoelsesince(message):
-    clientSocket.send(message)
-    sentence = clientSocket.recv(1024)
-    print 'From Server:', sentence
-    takeMessages()
-    
+def rcv_commands():
+    message = ""
+    thread.start_new_thread (takeMessages,(message,))
+    while 1:
+        sentence = clientSocket.recv(1024)
+        message = sentence
+        if (sentence == "Force Logout"):
+            print sentence
+            message = "login"
+            login()
+        elif (sentence == "Logged out"):
+            print 'From Server:', sentence
+            login()   
+        else:
+            print 'From Server:', sentence
+    return        
+
 def login(): 
     count = 0
+    stop_thread = True
     name = raw_input('Username :')
     password = raw_input('Password :')
     sentence = name + " " + password
@@ -45,10 +44,10 @@ def login():
     clientSocket.send(sentence)
 
     modifiedSentence = clientSocket.recv(1024)
-    
     print 'From Server:', modifiedSentence
-    if (modifiedSentence == "Login Successfull"):
-        takeMessages()
+    l1 = modifiedSentence.split() 
+    if "Successfull" in l1:
+        rcv_commands()
     else:
         login()
 
