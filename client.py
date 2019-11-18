@@ -2,31 +2,30 @@
 from socket import *
 import sys
 import thread
-stop_thread = False
 
-def takeMessages(message):
+def takeMessages(stop_thread):
     while 1:
-        if (message == "login"):
-            break
         message = raw_input('Command :')
         if stop_thread:
             break
-        clientSocket.send(message)
+        try:
+            clientSocket.send(message)
+        except:
+            break
     return   
     
-def rcv_commands():
-    message = ""
-    thread.start_new_thread (takeMessages,(message,))
+def rcv_commands(stop_thread):
+    stop_thread = False
+    thread.start_new_thread (takeMessages,(stop_thread,))
     while 1:
         sentence = clientSocket.recv(1024)
         message = sentence
         if (sentence == "Force Logout"):
             print sentence
-            message = "login"
-            login()
+            clientSocket.close()
         elif (sentence == "Logged out"):
             print 'From Server:', sentence
-            login()   
+            clientSocket.close()
         else:
             print 'From Server:', sentence
     return        
@@ -47,12 +46,20 @@ def login():
     print 'From Server:', modifiedSentence
     l1 = modifiedSentence.split() 
     if "Successfull" in l1:
-        rcv_commands()
+        rcv_commands(stop_thread)
     else:
         login()
 
-if __name__ == "__main__":
+def main():
 
+    serverName = 'localhost'
+    serverPort = int(sys.argv[1])
+    clientSocket = socket(AF_INET, SOCK_STREAM)
+    clientSocket.connect((serverName, serverPort))
+    login()
+
+if __name__ == "__main__":
+    
     serverName = 'localhost'
     serverPort = int(sys.argv[1])
     clientSocket = socket(AF_INET, SOCK_STREAM)
