@@ -26,7 +26,6 @@ def whoelse(sock,sentence):
 # Checks and returns the names of users who have been online for the last "time"
 # seconds.
 def who_else_since (sock, time):
-    print(userTimes)
     sentence = "\nSince last %d seconds" % int(time)
     for i in userTimes.values():
         cond = True
@@ -47,11 +46,17 @@ def who_else_since (sock, time):
 def broadcast(sock, line):
     br = line.split(" ",1)[1]
     message = "\nBroadcast Message: " + br
+    cond = False
     for i in dataDict.keys():
-        if i != sock:
+        if dataDict.get(sock) in blockDict.get(dataDict.get(i)):
+            cond = True
+        elif i != sock:
             i.send(message)
     
-    return "Message Sent" 
+    if cond:
+        return "Message cannot be delivered to some user(s)."
+    else:
+        return "Message Sent" 
     
 # This function is responsible for sending messages from one client to another
 # and also stores a message if the reciever is offline.
@@ -62,9 +67,11 @@ def messaging(sock, line):
     sent = False
     message = "From %s: " % dataDict.get(sock) + sending
     
+    if reciever not in names:
+        return "No user with name %s" % reciever    
     if dataDict.get(sock) in blockDict.get(reciever):
         return "User not found"
-    
+        
 
     for i in dataDict.keys():
         if dataDict.get(i) == reciever:
@@ -106,9 +113,10 @@ def unblock_user(sock,line):
         if to_unblock in blockDict.get(dataDict.get(sock)):
             blockDict.get(dataDict.get(sock)).remove(to_unblock)
             serverMessage = " %s has been un blocked" % to_unblock
-            
+        else:
+            serverMessage = " %s is not blocked" % to_unblock
     else:
-        serverMessage = "Unknown user."    
+        serverMessage = "You have no blocked users."    
 
     return serverMessage
         
@@ -133,6 +141,7 @@ def login_check(sock,sentence):
         serverMessage = "Already logged in"
         return serverMessage
     
+    message = " "
     presence = "\nNow up: "
     for j in range (0, len(names)):
         if (name == names[j]):
@@ -144,11 +153,11 @@ def login_check(sock,sentence):
                 lastActivity.update({sock:datetime.now()})
 
                 presence = presence + dataDict.get(sock)                 
-                message = " "
+                
                 for offm in offlineStore.get(name):
                     message += offm + "\n"
                     
-                
+                offlineStore[name] = ""
                 
                 for e in dataDict.keys():
                     if e != sock and dataDict.get(e) not in blockDict.get(name):
@@ -162,9 +171,10 @@ def login_check(sock,sentence):
                     serverMessage="You are blocked"
                     blocked.append(name)
                 names_dict.update({name: counter})
-                break
+                return serverMessage
         else :
             serverMessage="Wrong username"
+            
     return serverMessage + "\n" + message
 
 # Processes a logout request from the client and removes the client from
@@ -172,6 +182,8 @@ def login_check(sock,sentence):
 def logout (sock, sentence):
     name = dataDict.get(sock)
     dataDict.pop(sock)
+    for i in dataDict:
+        i.send("%s logged out." %name)
     userTimes.update({name: datetime.now()})
     return "Logged out"
  
@@ -181,8 +193,6 @@ def force_logout (sock):
     sock.send("Force Logout")
     dataDict.pop(sock)
     lastActivity.pop(sock)
-    sockfd = int(sock)
-    connectionList.pop(sockfd)
     
 # Updates times for all logged in users who are still online.
 def update_times():
@@ -192,7 +202,15 @@ def update_times():
 # Updates the last time the client made a request.
 def last_activity_update(sock):
     lastActivity.update({sock:datetime.now()})
-    
+ 
+
+#def startprivate(sock,name):
+ 
+#    if name in dataDict.values():
+#        sock1 = dataDict.keys()[dataDict.values().index(name)]
+#        port_recv = p2pDict.get(sock1)
+#        port_sender
+          
     
 # Function calls different functions to process the 
 # recieved message from the client.
@@ -221,7 +239,6 @@ def process(sock,sentence):
             message = unblock_user(sock,line)
         else:
             message = login_check(sock,line)
-        
     return message
     
     
@@ -229,7 +246,6 @@ def process(sock,sentence):
 # limit and calls the force_logout() function if true.    
 def check_offlines(timeout):
     while 1:
-        print(dataDict)
         for i in dataDict.keys():    
             if (lastActivity.get(i) == None): continue
             seconds = int((datetime.now() - lastActivity.get(i)).seconds) 
@@ -263,6 +279,7 @@ if __name__ == "__main__":
     lastActivity = {}
     blockDict = {}
     offlineStore = {} 
+    p2pDict = {}
     for i in names:
         blockDict[i] = []
         offlineStore[i] = []    
@@ -283,14 +300,20 @@ if __name__ == "__main__":
         for sock in read_sockets:
             if sock == serverSocket:
                 sockfd, addr = serverSocket.accept()
-                print sockfd
+                p2pDict.update({sockfd:addr[1]})
                 connectionList.append(sockfd)
             else:
                 try:
                     sentence = sock.recv(1024)
+                    try:
+                        serverMessage = process(sock,sentence)
+                        sock.send(serverMessage)        
+                    except:
+                        sock.send("Invalid Command")
                 except:                    
-                    print "Invalid Command"
-                serverMessage = process(sock,sentence)
-                sock.send(serverMessage)
+                    connectionList.remove(sock)
+                    read_sockets.remove(sock) 
+                    continue                   
+                
     connectionSocket.close()
 
